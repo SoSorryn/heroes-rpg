@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="ru" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Предметы — Админ</title>
+    <link rel="stylesheet" th:href="@{/css/style.css}">
+    <style>
+        .items-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 16px;
+            margin-top: 20px;
+        }
+        .item-card {
+            background: rgba(0, 0, 0, .28);
+            border: 1px solid var(--border-soft);
+            border-radius: 12px;
+            padding: 16px;
+            transition: border-color .3s, transform .3s;
+        }
+        .item-card:hover {
+            border-color: rgba(230, 192, 104, .5);
+            transform: translateY(-3px);
+        }
+        .item-card h3 {
+            margin: 0 0 4px;
+            color: var(--gold);
+            font-size: 1.05rem;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .item-card .meta {
+            font-size: .82rem;
+            color: var(--text-dim);
+            margin-bottom: 10px;
+            line-height: 1.5;
+        }
+        .item-card .meta b { color: var(--text); }
+        .item-card .bonuses {
+            display: flex;
+            gap: 8px;
+            font-size: .8rem;
+            font-weight: 700;
+            margin-bottom: 10px;
+            flex-wrap: wrap;
+        }
+        .item-card .bonuses .s { color: #e0584a; }
+        .item-card .bonuses .m { color: #7aa2f7; }
+        .item-card .bonuses .a { color: #4fc98a; }
+        .item-card .actions {
+            display: flex;
+            gap: 8px;
+        }
+        .item-card .actions a {
+            flex: 1;
+            text-align: center;
+        }
+
+        .badge-rarity {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 999px;
+            font-size: .7rem;
+            font-weight: 700;
+            letter-spacing: .04em;
+        }
+        .r1 { background: rgba(154, 155, 181, .2); color: #9a9bb5; border: 1px solid #9a9bb5; }
+        .r2 { background: rgba(79, 201, 138, .15); color: #4fc98a; border: 1px solid #4fc98a; }
+        .r3 { background: rgba(122, 162, 247, .15); color: #7aa2f7; border: 1px solid #7aa2f7; }
+        .r4 { background: rgba(192, 132, 252, .15); color: #c084fc; border: 1px solid #c084fc; }
+        .r5 { background: rgba(230, 192, 104, .15); color: var(--gold); border: 1px solid var(--gold); }
+    </style>
+</head>
+<body>
+<div class="page">
+    <div class="toolbar">
+        <a class="back-inline" th:href="@{/admin/users}">← К пользователям</a>
+        <span style="color:var(--gold); font-weight:700;">📦 Предметы</span>
+    </div>
+
+    <p th:if="${message}" th:text="${message}" class="flash"></p>
+
+    <h1 class="title">Управление предметами</h1>
+
+    <div style="text-align:center; margin-bottom:20px;">
+        <a href="/admin/items/new" class="btn" style="text-decoration:none;">➕ Создать новый предмет</a>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="items-grid">
+        <div class="item-card" th:each="it : ${items}">
+            <h3>
+                <span th:text="${it.icon}"></span>
+                <span th:text="${it.name}"></span>
+            </h3>
+            <div class="meta">
+                <span class="badge-rarity" th:classappend="'r' + ${it.rarity}"
+                      th:text="'Редкость ' + ${it.rarity}"></span>
+                <br>
+                ID: <b th:text="${it.id}"></b> · Тип: <b th:text="${it.type}"></b><br>
+                Слот: <b th:text="${it.slot}"></b> · Класс: <b th:text="${it.forClass}"></b><br>
+                Цена: <b th:text="${it.price}"></b> 💰 · Шанс дропа: <b th:text="${it.dropChance}"></b>%
+            </div>
+            <div class="bonuses">
+                <span class="s" th:if="${it.bonusStr > 0}" th:text="'STR +' + ${it.bonusStr}"></span>
+                <span class="m" th:if="${it.bonusMag > 0}" th:text="'MAG +' + ${it.bonusMag}"></span>
+                <span class="a" th:if="${it.bonusAgi > 0}" th:text="'AGI +' + ${it.bonusAgi}"></span>
+                <span th:if="${it.bonusStr == 0 and it.bonusMag == 0 and it.bonusAgi == 0}"
+                      style="color:var(--text-dim); font-weight:400;">Без бонусов</span>
+            </div>
+            <div class="actions">
+                <a th:href="@{|/admin/items/${it.id}/edit|}" class="btn-small">✏ Изменить</a>
+                <form th:action="@{|/admin/items/${it.id}/delete|}" method="post"
+                      th:attr="data-name=${it.name}"
+                      onsubmit="return confirm('Удалить ' + this.dataset.name + '?')"
+                      style="margin:0; flex:1; display:flex;">
+                    <button type="submit" class="btn-small btn-danger" style="width:100%;">🗑 Удалить</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <p th:if="${items.isEmpty()}" class="empty">Предметов нет. Создайте первый!</p>
+</div>
+</body>
+</html>

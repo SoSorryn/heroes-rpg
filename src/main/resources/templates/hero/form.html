@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="ru" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title th:text="${heading}">Форма</title>
+    <link rel="stylesheet" th:href="@{/css/style.css}">
+</head>
+<body>
+<div class="page">
+    <div class="toolbar">
+        <a class="back-inline" th:href="@{${base}}">← К списку</a>
+    </div>
+
+    <div class="form-card">
+        <div class="hero-icon" th:text="${icon}">⚔️</div>
+        <h1 th:text="${heading}">Форма</h1>
+
+        <form th:action="@{${action}}" th:object="${hero}" method="post">
+            <label for="name">🏷 Имя</label>
+            <input id="name" th:field="*{name}" required>
+
+            <label for="health">❤️ Здоровье</label>
+            <input id="health" type="number" th:field="*{health}" min="1" required>
+
+            <label for="extra" th:text="${extraIcon} + ' ' + ${extraLabel}">Характеристика</label>
+            <input id="extra" type="number" th:field="*{extra}" min="0" required>
+
+            <button type="submit">💾 Сохранить</button>
+        </form>
+    </div>
+</div>
+</body>
+</html>

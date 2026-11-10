@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="ru" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Инвентарь</title>
+    <link rel="stylesheet" th:href="@{/css/style.css}">
+    <style>
+        .inv-stage {
+            container-type: inline-size;
+            position: relative;
+            width: 100%;
+            aspect-ratio: 1536 / 1024;
+            border-radius: 16px;
+            border: 1px solid rgba(138, 122, 92, .45);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, .6), inset 0 0 120px rgba(0, 0, 0, .55);
+            animation: cardIn .8s var(--ease) both;
+        }
+        .inv-stage::before, .inv-stage::after {
+            content: ''; position: absolute; inset: 0; pointer-events: none; border-radius: inherit;
+            background:
+                    radial-gradient(40% 25% at 20% 80%, rgba(200, 190, 170, .09), transparent 70%),
+                    radial-gradient(35% 22% at 75% 70%, rgba(200, 190, 170, .07), transparent 70%);
+            animation: fogMove 22s ease-in-out infinite alternate;
+        }
+        .inv-stage::after { animation-duration: 31s; animation-direction: alternate-reverse; opacity: .8; }
+        @keyframes fogMove { from { transform: translateX(-4%); } to { transform: translateX(5%); } }
+        .aura {
+            position: absolute; left: 36%; top: 16%; width: 28%; height: 68%; pointer-events: none;
+            background: radial-gradient(ellipse at 50% 55%, rgba(230, 192, 104, .10), transparent 65%);
+            animation: aura 4.5s ease-in-out infinite alternate;
+        }
+        @keyframes aura { from { opacity: .35; } to { opacity: 1; } }
+
+        .slot, .eq {
+            position: relative;
+            border: 1px solid rgba(160, 140, 105, .55);
+            background: rgba(10, 9, 8, .55);
+            border-radius: 3px;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            transition: border-color .25s, box-shadow .25s, transform .25s var(--ease), background .25s;
+        }
+        .bag {
+            position: absolute; left: 3.26%; top: 16.1%; width: 28.5%; height: 60.1%;
+            display: grid; grid-template-columns: repeat(4, 1fr); grid-template-rows: repeat(5, 1fr);
+            gap: 1.9% 2.4%;
+        }
+        .bag .slot { animation: panelIn .5s var(--ease) both; }
+        .bag .slot:nth-child(4n+1) { animation-delay: .05s; }
+        .bag .slot:nth-child(4n+2) { animation-delay: .12s; }
+        .bag .slot:nth-child(4n+3) { animation-delay: .19s; }
+        .bag .slot:nth-child(4n)   { animation-delay: .26s; }
+
+        .slot.filled { cursor: grab; background: rgba(30, 26, 20, .7); }
+        .slot.filled:active { cursor: grabbing; }
+        .slot.filled:hover, .slot.filled.open {
+            border-color: var(--gold);
+            transform: translateY(-3px);
+            box-shadow: 0 0 18px rgba(230, 192, 104, .35), inset 0 0 14px rgba(230, 192, 104, .12);
+            z-index: 20;
+        }
+        .slot .ico { font-size: 3.4cqw; line-height: 1; transition: transform .3s var(--ease); pointer-events: none; }
+        .slot.filled:hover .ico { transform: scale(1.2) rotate(6deg); }
+
+        .slot.r2 { border-color: rgba(79, 201, 138, .7); }
+        .slot.r3 { border-color: rgba(122, 162, 247, .8); box-shadow: inset 0 0 12px rgba(122, 162, 247, .2); }
+        .slot.r4 { border-color: rgba(192, 132, 252, .85); box-shadow: inset 0 0 14px rgba(192, 132, 252, .25); }
+        .slot.r5 { border-color: var(--gold); box-shadow: inset 0 0 16px rgba(230, 192, 104, .3); animation: panelIn .5s var(--ease) both, legendBorder 2.2s ease-in-out infinite alternate .6s; }
+        @keyframes legendBorder {
+            from { box-shadow: inset 0 0 10px rgba(230, 192, 104, .2), 0 0 4px rgba(230, 192, 104, .2); }
+            to   { box-shadow: inset 0 0 20px rgba(230, 192, 104, .45), 0 0 16px rgba(230, 192, 104, .45); }
+        }
+
+        .eq { position: absolute; text-align: center; padding: 2px; }
+        .eq::before {
+            content: attr(data-glyph); position: absolute; font-size: 3.2cqw; opacity: .16; filter: grayscale(1);
+        }
+        .eq.has::before { display: none; }
+        .eq.has { background: rgba(40, 33, 22, .75); border-color: var(--gold); box-shadow: 0 0 16px rgba(230, 192, 104, .25), inset 0 0 12px rgba(230, 192, 104, .1); cursor: grab; }
+        .eq.has:active { cursor: grabbing; }
+        .eq:hover { transform: translateY(-3px); border-color: var(--gold); }
+        .eq.drag-over {
+            border-color: var(--gold) !important;
+            background: rgba(40, 33, 22, .9) !important;
+            box-shadow: 0 0 26px rgba(230, 192, 104, .6), inset 0 0 16px rgba(230, 192, 104, .25) !important;
+            transform: translateY(-4px) scale(1.03);
+        }
+        .eq-label {
+            position: absolute; top: -1.9cqw; left: 0; right: 0; font-size: 1.05cqw; letter-spacing: .15em;
+            text-transform: uppercase; color: rgba(200, 185, 150, .75);
+        }
+        .eq-icon { font-size: 4.2cqw; line-height: 1; position: relative; animation: floaty 4s ease-in-out infinite; pointer-events: none; }
+        .eq-name { font-size: 1cqw; color: var(--text-dim); margin-top: .3cqw; position: relative; padding: 0 2px; pointer-events: none; }
+        .eq.has .eq-icon { filter: drop-shadow(0 0 8px rgba(230, 192, 104, .6)); }
+
+        .eq-weapon { left: 34.2%; top: 16.4%; width: 8.6%; height: 14.1%; }
+        .eq-ring   { left: 34.2%; top: 37%;   width: 8.6%; height: 13.5%; }
+        .eq-helmet { left: 64.4%; top: 16.4%; width: 8.5%; height: 14.1%; }
+        .eq-chest  { left: 66.2%; top: 56%;   width: 6.8%; height: 11.2%; }
+        .eq-amulet { left: 50%; top: 50%; transform: translate(-50%, -50%); width: 8.6%; height: 13.5%; } /* Слот для амулета (примерно по центру) */
+
+        .unequip-form { position: absolute; top: -6px; right: -6px; margin: 0; z-index: 5; }
+        .unequip-form button {
+            width: 20px; height: 20px; padding: 0; line-height: 1;
+            border-radius: 50%; border: 1px solid rgba(160, 140, 105, .7);
+            background: rgba(20, 16, 12, .95); color: #d8cdb4;
+            font-size: 11px; cursor: pointer;
+            transition: background .2s, border-color .2s, color .2s, transform .2s;
+        }
+        .unequip-form button:hover {
+            background: #5a1f1a; border-color: #e0584a; color: #fff;
+            transform: scale(1.15);
+        }
+
+        .stats-panel {
+            position: absolute; left: 76.2%; top: 16.9%; width: 20.6%; height: 65.9%;
+            border: 1px solid rgba(160, 140, 105, .55);
+            background: rgba(8, 7, 6, .62);
+            backdrop-filter: blur(3px);
+            animation: panelIn .8s var(--ease) both .3s;
+        }
+        .st-row {
+            position: absolute; left: 8%; right: 9%; transform: translateY(-50%);
+            display: flex; align-items: center; gap: 4%;
+            font-size: 1.9cqw; color: #d8cdb4; letter-spacing: .03em;
+            animation: rowIn .6s var(--ease) both;
+        }
+        .st-row .gl { width: 2.4cqw; text-align: center; font-size: 2cqw; color: #a8987a; transition: transform .3s var(--ease), color .3s; }
+        .st-row:hover .gl { transform: scale(1.3) rotate(-8deg); color: var(--gold); }
+        .st-row .nm { flex: 1; font-family: Georgia, 'Times New Roman', serif; }
+        .st-row .vl { font-weight: 700; color: var(--gold); text-shadow: 0 0 10px rgba(230, 192, 104, .45); font-variant-numeric: tabular-nums; }
+        .st-bar { position: absolute; left: 8%; right: 9%; height: 3px; background: rgba(255, 255, 255, .07); border-radius: 3px; overflow: hidden; transform: translateY(1.9cqw); }
+        .st-bar > i { display: block; height: 100%; width: 0; border-radius: inherit; transition: width 1.2s var(--ease); }
+        .hp .st-bar > i { background: linear-gradient(90deg, #8a2b25, #e0584a); }
+        .fp .st-bar > i { background: linear-gradient(90deg, #2d5a8a, #7aa2f7); }
+        .str .st-bar > i { background: linear-gradient(90deg, #8a2b25, #e0584a); }
+        .mag .st-bar > i { background: linear-gradient(90deg, #5b3a8a, #c084fc); }
+        .agi .st-bar > i { background: linear-gradient(90deg, #2d7a52, #4fc98a); }
+
+        .r-hp  { top: 9.9%; }  .r-fp  { top: 20.6%; } .r-str { top: 32.9%; } .r-mag { top: 41.8%; } .r-agi { top: 50.4%; }
+        .r-hp { animation-delay: .5s; } .r-fp { animation-delay: .6s; } .r-str { animation-delay: .7s; } .r-mag { animation-delay: .8s; } .r-agi { animation-delay: .9s; }
+
+        .st-foot {
+            position: absolute; left: 8%; right: 9%; bottom: 5%; font-size: 1.15cqw; color: var(--text-dim); line-height: 1.5;
+        }
+        .st-foot b { color: var(--gold); }
+
+        .pop {
+            position: absolute; top: 108%; left: 50%; width: 210px; transform: translateX(-50%) translateY(8px) scale(.95);
+            padding: 14px; text-align: left; border-radius: 12px; pointer-events: none; opacity: 0; visibility: hidden;
+            background: rgba(14, 12, 10, .97); border: 1px solid var(--gold);
+            box-shadow: 0 14px 40px rgba(0, 0, 0, .7), 0 0 24px rgba(230, 192, 104, .2);
+            transition: opacity .2s, transform .3s var(--ease), visibility .2s;
+            font-size: 13px; z-index: 30;
+        }
+        .slot.open .pop { opacity: 1; visibility: visible; pointer-events: auto; transform: translateX(-50%) translateY(0) scale(1); }
+        .pop h4 { margin: 0 0 2px; font-size: 15px; }
+        .pop .meta { color: var(--text-dim); font-size: 11px; margin-bottom: 8px; }
+        .pop .bn { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; font-weight: 700; }
+        .pop .bn .s { color: #e0584a; } .pop .bn .m { color: #7aa2f7; } .pop .bn .a { color: #4fc98a; }
+        .pop button { width: 100%; padding: 8px 12px; font-size: .85rem; }
+
+        .inv-hint { text-align: center; color: var(--text-dim); margin: 14px 0 0; font-size: .9rem; }
+
+        .bag.drag-hover {
+            outline: 2px dashed var(--gold);
+            outline-offset: 6px;
+            border-radius: 8px;
+        }
+
+        @media (max-width: 720px) {
+            .pop { width: 170px; font-size: 12px; }
+        }
+    </style>
+</head>
+<body>
+<div class="page" th:with="str=${totalStr != null ? totalStr : 0}, mag=${totalMag != null ? totalMag : 0}, agi=${totalAgi != null ? totalAgi : 0}">
+    <div class="toolbar">
+        <a class="back-inline" th:href="@{/}">← На главную</a>
+        <span class="gold-chip" style="color:var(--gold); font-weight:700;">💰 <span th:text="${user.gold}"></span> золота</span>
+    </div>
+
+    <p th:if="${message}" th:text="${message}" class="flash"></p>
+
+    <h1 class="title">🎒 Экипировка и Инвентарь</h1>
+    <div class="divider"></div>
+
+    <div class="inv-stage" id="stage"
+         th:with="bgName=${user.heroClass == null ? 'inventory-bg'
+                     : user.heroClass.name() == 'ARCHER' ? 'inventory-bg-archer'
+                     : user.heroClass.name() == 'MAGE' ? 'inventory-bg-mage'
+                     : 'inventory-bg'}"
+         th:style="|background: url('/images/${bgName}.jpg') center / cover no-repeat, radial-gradient(ellipse at 50% 60%, #2a2622, #0d0c0b 70%);|">
+
+        <div class="aura"></div>
+
+        <div class="bag" id="bag">
+            <div th:each="it : ${visibleInventory}"
+                 class="slot filled" th:classappend="'r' + ${it.rarity}" tabindex="0"
+                 draggable="true" th:attr="data-item-id=${it.id}">
+
+                <!-- КАРТИНКА ИЛИ ЭМОДЗИ -->
+                <img th:if="${it.imageName != null and !it.imageName.isEmpty()}"
+                     th:src="@{|/images/item_icons/${it.imageName}|}"
+                     style="width: 100%; height: 100%; object-fit: contain; padding: 4px;"
+                     onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+                <span class="ico" th:text="${it.icon}" style="display:none;">🎁</span>
+
+                <div class="pop" onclick="event.stopPropagation()">
+                    <h4 th:text="${it.name}" th:classappend="'rarity-' + ${it.rarity}">Предмет</h4>
+                    <div class="meta" th:text="${it.type} + ' · ' + ${it.slot}">Тип</div>
+                    <div class="bn">
+                        <span class="s" th:if="${it.bonusStr > 0}" th:text="'STR +' + ${it.bonusStr}"></span>
+                        <span class="m" th:if="${it.bonusMag > 0}" th:text="'MAG +' + ${it.bonusMag}"></span>
+                        <span class="a" th:if="${it.bonusAgi > 0}" th:text="'AGI +' + ${it.bonusAgi}"></span>
+                        <span th:if="${it.bonusStr == 0 and it.bonusMag == 0 and it.bonusAgi == 0}" style="color:var(--text-dim); font-weight:400;">Без бонусов</span>
+                    </div>
+                    <form th:action="@{|/inventory/equip/${it.id}|}" method="post" style="margin:0;">
+                        <button type="submit">⚔ Надеть</button>
+                    </form>
+                </div>
+            </div>
+            <div class="slot" th:if="${visibleCount < 20}"
+                 th:each="n : ${#numbers.sequence(visibleCount + 1, 20)}"></div>
+        </div>
+
+        <div class="eq eq-weapon" data-glyph="🗡️" data-slot="WEAPON" th:classappend="${user.weapon != null} ? 'has'"
+             th:attr="draggable=${user.weapon != null} ? 'true' : 'false'">
+            <div class="eq-label">Оружие</div>
+            <img th:if="${user.weapon != null and user.weapon.imageName != null}" th:src="@{|/images/item_icons/${user.weapon.imageName}|}" style="max-width: 80%; max-height: 60%; object-fit: contain; position: relative;" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+            <div class="eq-icon" th:text="${user.weapon != null ? user.weapon.icon : ''}" th:style="${user.weapon != null and user.weapon.imageName != null} ? 'display:none;' : 'display:block;'"></div>
+            <div class="eq-name" th:text="${user.weapon != null ? user.weapon.name : ''}"></div>
+            <form th:if="${user.weapon != null}" th:action="@{/inventory/unequip}" method="post" class="unequip-form">
+                <input type="hidden" name="slot" value="WEAPON">
+                <button type="submit" title="Снять">✕</button>
+            </form>
+        </div>
+        <div class="eq eq-ring" data-glyph="💍" data-slot="RING" th:classappend="${user.ring != null} ? 'has'"
+             th:attr="draggable=${user.ring != null} ? 'true' : 'false'">
+            <div class="eq-label">Кольцо</div>
+            <img th:if="${user.ring != null and user.ring.imageName != null}" th:src="@{|/images/item_icons/${user.ring.imageName}|}" style="max-width: 80%; max-height: 60%; object-fit: contain; position: relative;" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+            <div class="eq-icon" th:text="${user.ring != null ? user.ring.icon : ''}" th:style="${user.ring != null and user.ring.imageName != null} ? 'display:none;' : 'display:block;'"></div>
+            <div class="eq-name" th:text="${user.ring != null ? user.ring.name : ''}"></div>
+            <form th:if="${user.ring != null}" th:action="@{/inventory/unequip}" method="post" class="unequip-form">
+                <input type="hidden" name="slot" value="RING">
+                <button type="submit" title="Снять">✕</button>
+            </form>
+        </div>
+        <div class="eq eq-helmet" data-glyph="🪖" data-slot="HELMET" th:classappend="${user.helmet != null} ? 'has'"
+             th:attr="draggable=${user.helmet != null} ? 'true' : 'false'">
+            <div class="eq-label">Шлем</div>
+            <img th:if="${user.helmet != null and user.helmet.imageName != null}" th:src="@{|/images/item_icons/${user.helmet.imageName}|}" style="max-width: 80%; max-height: 60%; object-fit: contain; position: relative;" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+            <div class="eq-icon" th:text="${user.helmet != null ? user.helmet.icon : ''}" th:style="${user.helmet != null and user.helmet.imageName != null} ? 'display:none;' : 'display:block;'"></div>
+            <div class="eq-name" th:text="${user.helmet != null ? user.helmet.name : ''}"></div>
+            <form th:if="${user.helmet != null}" th:action="@{/inventory/unequip}" method="post" class="unequip-form">
+                <input type="hidden" name="slot" value="HELMET">
+                <button type="submit" title="Снять">✕</button>
+            </form>
+        </div>
+        <div class="eq eq-chest" data-glyph="🛡️" data-slot="CHEST" th:classappend="${user.chest != null} ? 'has'"
+             th:attr="draggable=${user.chest != null} ? 'true' : 'false'">
+            <div class="eq-label">Броня</div>
+            <img th:if="${user.chest != null and user.chest.imageName != null}" th:src="@{|/images/item_icons/${user.chest.imageName}|}" style="max-width: 80%; max-height: 60%; object-fit: contain; position: relative;" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+            <div class="eq-icon" th:text="${user.chest != null ? user.chest.icon : ''}" th:style="${user.chest != null and user.chest.imageName != null} ? 'display:none;' : 'display:block;'"></div>
+            <div class="eq-name" th:text="${user.chest != null ? user.chest.name : ''}"></div>
+            <form th:if="${user.chest != null}" th:action="@{/inventory/unequip}" method="post" class="unequip-form">
+                <input type="hidden" name="slot" value="CHEST">
+                <button type="submit" title="Снять">✕</button>
+            </form>
+        </div>
+
+        <!-- НОВЫЙ СЛОТ: АМУЛЕТ -->
+        <div class="eq eq-amulet" data-glyph="📿" data-slot="AMULET" th:classappend="${user.amulet != null} ? 'has'"
+             th:attr="draggable=${user.amulet != null} ? 'true' : 'false'">
+            <div class="eq-label">Амулет</div>
+            <img th:if="${user.amulet != null and user.amulet.imageName != null}" th:src="@{|/images/item_icons/${user.amulet.imageName}|}" style="max-width: 80%; max-height: 60%; object-fit: contain; position: relative;" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+            <div class="eq-icon" th:text="${user.amulet != null ? user.amulet.icon : ''}" th:style="${user.amulet != null and user.amulet.imageName != null} ? 'display:none;' : 'display:block;'"></div>
+            <div class="eq-name" th:text="${user.amulet != null ? user.amulet.name : ''}"></div>
+            <form th:if="${user.amulet != null}" th:action="@{/inventory/unequip}" method="post" class="unequip-form">
+                <input type="hidden" name="slot" value="AMULET">
+                <button type="submit" title="Снять">✕</button>
+            </form>
+        </div>
+
+        <div class="stats-panel">
+            <div class="st-row hp r-hp">
+                <span class="gl">♥</span><span class="nm">HP</span>
+                <span class="vl" data-count th:text="${100 + str * 10}">100</span>
+                <div class="st-bar"><i th:attr="data-w=${(100 + str * 10) / 6}"></i></div>
+            </div>
+            <div class="st-row fp r-fp">
+                <span class="gl">💧</span><span class="nm">FP</span>
+                <span class="vl" data-count th:text="${50 + mag * 5}">50</span>
+                <div class="st-bar"><i th:attr="data-w=${(50 + mag * 5) / 3}"></i></div>
+            </div>
+            <div class="st-row str r-str">
+                <span class="gl">⚡</span><span class="nm">STR</span>
+                <span class="vl" data-count th:text="${str}">0</span>
+                <div class="st-bar"><i th:attr="data-w=${str * 100 / 40}"></i></div>
+            </div>
+            <div class="st-row mag r-mag">
+                <span class="gl">✦</span><span class="nm">MAG</span>
+                <span class="vl" data-count th:text="${mag}">0</span>
+                <div class="st-bar"><i th:attr="data-w=${mag * 100 / 40}"></i></div>
+            </div>
+            <div class="st-row agi r-agi">
+                <span class="gl">🥾</span><span class="nm">AGI</span>
+                <span class="vl" data-count th:text="${agi}">0</span>
+                <div class="st-bar"><i th:attr="data-w=${agi * 100 / 40}"></i></div>
+            </div>
+
+            <div class="st-foot">
+                Рюкзак: <b th:text="${visibleCount} + '/20'">0/20</b><br>
+                Нажмите на предмет, чтобы надеть.<br>
+                Или перетащите в слот.
+            </div>
+        </div>
+    </div>
+
+    <p class="inv-hint">Совет: лучшие предметы редкостей 4–5 светятся в рюкзаке. Ищите их на рынке и в путешествиях.</p>
+</div>
+
+<script>
+    document.querySelectorAll('.slot.filled').forEach(s => {
+        s.addEventListener('click', e => {
+            const was = s.classList.contains('open');
+            document.querySelectorAll('.slot.open').forEach(x => x.classList.remove('open'));
+            if (!was) s.classList.add('open');
+            e.stopPropagation();
+        });
+        s.addEventListener('keydown', e => { if (e.key === 'Enter') s.click(); });
+    });
+    document.addEventListener('click', () => document.querySelectorAll('.slot.open').forEach(x => x.classList.remove('open')));
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') document.querySelectorAll('.slot.open').forEach(x => x.classList.remove('open')); });
+
+    document.querySelectorAll('[data-count]').forEach(el => {
+        const target = parseInt(el.textContent, 10);
+        if (isNaN(target) || target === 0) return;
+        const t0 = performance.now(), dur = 1000;
+        el.textContent = '0';
+        const step = now => {
+            const p = Math.min((now - t0) / dur, 1);
+            el.textContent = Math.round(target * (1 - Math.pow(1 - p, 3)));
+            if (p < 1) requestAnimationFrame(step);
+        };
+        requestAnimationFrame(step);
+    });
+    setTimeout(() => {
+        document.querySelectorAll('.st-bar > i').forEach(i => {
+            i.style.width = Math.min(100, parseFloat(i.dataset.w) || 0) + '%';
+        });
+    }, 600);
+
+    const bag = document.getElementById('bag');
+    let draggedItemId = null;
+    let draggedSlot = null;
+
+    document.querySelectorAll('.slot.filled').forEach(slot => {
+        slot.addEventListener('dragstart', e => {
+            draggedItemId = slot.dataset.itemId;
+            draggedSlot = null;
+            e.dataTransfer.setData('text/plain', 'item:' + draggedItemId);
+            e.dataTransfer.effectAllowed = 'move';
+            slot.style.opacity = '.4';
+        });
+        slot.addEventListener('dragend', () => {
+            draggedItemId = null;
+            slot.style.opacity = '';
+            document.querySelectorAll('.eq').forEach(x => x.classList.remove('drag-over'));
+            bag.classList.remove('drag-hover');
+        });
+    });
+
+    document.querySelectorAll('.eq.has').forEach(eq => {
+        eq.addEventListener('dragstart', e => {
+            draggedSlot = eq.dataset.slot;
+            draggedItemId = null;
+            e.dataTransfer.setData('text/plain', 'slot:' + draggedSlot);
+            e.dataTransfer.effectAllowed = 'move';
+            eq.style.opacity = '.4';
+        });
+        eq.addEventListener('dragend', () => {
+            draggedSlot = null;
+            eq.style.opacity = '';
+            bag.classList.remove('drag-hover');
+        });
+    });
+
+    document.querySelectorAll('.eq').forEach(eq => {
+        eq.addEventListener('dragover', e => {
+            if (!draggedItemId) return;
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            eq.classList.add('drag-over');
+        });
+        eq.addEventListener('dragleave', () => eq.classList.remove('drag-over'));
+        eq.addEventListener('drop', e => {
+            if (!draggedItemId) return;
+            e.preventDefault();
+            eq.classList.remove('drag-over');
+            const id = draggedItemId;
+            if (!id) return;
+            fetch('/inventory/equip/' + id, {
+                method: 'POST',
+                redirect: 'manual'
+            }).then(() => location.reload()).catch(() => location.reload());
+        });
+    });
+
+    bag.addEventListener('dragover', e => {
+        if (!draggedSlot) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        bag.classList.add('drag-hover');
+    });
+    bag.addEventListener('dragleave', e => {
+        if (e.target === bag) bag.classList.remove('drag-hover');
+    });
+    bag.addEventListener('drop', e => {
+        if (!draggedSlot) return;
+        e.preventDefault();
+        bag.classList.remove('drag-hover');
+        const slot = draggedSlot;
+        if (!slot) return;
+        fetch('/inventory/unequip', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: 'slot=' + encodeURIComponent(slot),
+            redirect: 'manual'
+        }).then(() => location.reload()).catch(() => location.reload());
+    });
+</script>
+</body>
+</html>

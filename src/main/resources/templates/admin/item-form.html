@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="ru" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title th:text="${item.id == null ? 'Новый предмет' : 'Редактирование предмета'}"></title>
+    <link rel="stylesheet" th:href="@{/css/style.css}">
+    <style>
+        .form-card { max-width: 600px; }
+        .form-row { display: flex; gap: 12px; }
+        .form-row > div { flex: 1; }
+        .form-card select {
+            width: 100%; padding: 11px 14px; border-radius: 10px;
+            border: 1px solid var(--border-soft);
+            background: rgba(10, 12, 30, 0.6); color: var(--text);
+            font-size: 1rem; outline: none;
+        }
+        .form-card select:focus { border-color: var(--gold); box-shadow: 0 0 0 3px rgba(230,192,104,.15); }
+        .img-preview { max-width: 100px; max-height: 100px; object-fit: contain; margin-top: 10px; border: 1px dashed var(--border-soft); padding: 4px; border-radius: 8px; }
+    </style>
+</head>
+<body>
+<div class="page">
+    <div class="toolbar">
+        <a class="back-inline" th:href="@{/admin/items}">← К предметам</a>
+    </div>
+
+    <div class="form-card">
+        <div class="hero-icon">📦</div>
+        <h1 th:text="${item.id == null ? 'Новый предмет' : 'Редактирование предмета'}">Редактирование предмета</h1>
+
+        <form th:action="${item.id == null} ? @{/admin/items/new} : @{|/admin/items/${item.id}/edit|}"
+              th:object="${item}" method="post" enctype="multipart/form-data">
+
+            <label for="name">🏷 Название</label>
+            <input id="name" th:field="*{name}" required maxlength="60">
+
+            <label for="icon">🖼 Иконка (эмодзи)</label>
+            <input id="icon" th:field="*{icon}" maxlength="20" placeholder="⚔️">
+
+            <label for="file">📁 Загрузить картинку (.png)</label>
+            <input type="file" id="file" name="file" accept="image/*" style="padding: 10px; background: transparent; border: 1px solid var(--border-soft);">
+
+            <!-- Превью текущей картинки -->
+            <div th:if="${item.imageName != null and !item.imageName.isEmpty()}" style="margin-top: 10px;">
+                <span style="color: var(--text-dim); font-size: 0.9rem;">Текущая картинка:</span><br>
+                <img th:src="@{|/images/item_icons/${item.imageName}|}" class="img-preview" alt="Превью">
+            </div>
+
+            <div class="form-row" style="margin-top: 15px;">
+                <div>
+                    <label for="forClass">🎭 Для класса</label>
+                    <select id="forClass" th:field="*{forClass}">
+                        <option value="any">any (любой)</option>
+                        <option value="warrior">warrior (Воин)</option>
+                        <option value="mage">mage (Маг)</option>
+                        <option value="archer">archer (Лучник)</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="type">📂 Тип</label>
+                    <input id="type" th:field="*{type}" maxlength="30" placeholder="weapon / armor">
+                </div>
+            </div>
+
+            <label for="slot">🎯 Слот</label>
+            <select id="slot" th:field="*{slot}">
+                <option value="WEAPON">WEAPON (оружие)</option>
+                <option value="HELMET">HELMET (шлем)</option>
+                <option value="CHEST">CHEST (броня)</option>
+                <option value="RING">RING (кольцо)</option>
+                <option value="AMULET">AMULET (амулет)</option>
+            </select>
+
+            <div class="form-row">
+                <div>
+                    <label for="price">💰 Цена</label>
+                    <input id="price" type="number" th:field="*{price}" min="0" required>
+                </div>
+                <div>
+                    <label for="rarity">🌟 Редкость (1–5)</label>
+                    <input id="rarity" type="number" th:field="*{rarity}" min="1" max="5" required>
+                </div>
+                <div>
+                    <label for="dropChance">🎲 Шанс выпадения (%)</label>
+                    <input id="dropChance" type="number" th:field="*{dropChance}" min="0" max="100" required>
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div>
+                    <label for="bonusStr">💪 STR +</label>
+                    <input id="bonusStr" type="number" th:field="*{bonusStr}" min="0" required>
+                </div>
+                <div>
+                    <label for="bonusMag">🔮 MAG +</label>
+                    <input id="bonusMag" type="number" th:field="*{bonusMag}" min="0" required>
+                </div>
+                <div>
+                    <label for="bonusAgi">🏹 AGI +</label>
+                    <input id="bonusAgi" type="number" th:field="*{bonusAgi}" min="0" required>
+                </div>
+            </div>
+
+            <button type="submit" th:text="${item.id == null ? '➕ Создать' : '💾 Сохранить'}">💾 Сохранить</button>
+        </form>
+
+        <a class="back" th:href="@{/admin/items}">← Назад к списку</a>
+    </div>
+</div>
+</body>
+</html>

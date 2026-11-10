@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="ru" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Админ-панель</title>
+    <link rel="stylesheet" th:href="@{/css/style.css}">
+    <style>
+        .admin-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 20px; margin-top: 20px; }
+        .user-card { background: rgba(0,0,0,.28); border: 1px solid var(--border-soft); border-radius: 14px; padding: 18px; transition: border-color .3s, box-shadow .3s; }
+        .user-card:hover { border-color: rgba(230,192,104,.5); box-shadow: 0 10px 26px rgba(0,0,0,.4); }
+        .user-card h3 { margin: 0 0 8px; color: var(--gold); font-size: 1.1rem; }
+        .user-meta { font-size: .85rem; color: var(--text-dim); margin-bottom: 14px; line-height: 1.6; }
+        .user-meta b { color: var(--text); }
+
+        .stat-block { display: flex; gap: 10px; margin-bottom: 10px; background: rgba(255,255,255,.03); padding: 8px; border-radius: 8px; border: 1px solid var(--border-soft); flex-wrap: wrap; }
+        .stat-block span { font-size: .9rem; }
+        .stat-block b { color: var(--gold); }
+
+        .user-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+        .user-actions form { display: inline-flex; align-items: center; gap: 6px; margin: 0; }
+        .user-actions input[type="text"], .user-actions input[type="number"], .user-actions select {
+            padding: 6px 10px; border-radius: 8px; border: 1px solid var(--border-soft);
+            background: rgba(10,12,30,.6); color: var(--text); font-size: .85rem; outline: none;
+        }
+        .user-actions input:focus, .user-actions select:focus { border-color: var(--gold); }
+        .user-actions input[type="number"] { width: 70px; }
+        .user-actions select { max-width: 200px; }
+
+        .admin-section-title { color: var(--gold); margin: 24px 0 8px; font-size: 1.1rem; font-weight: 700; letter-spacing: .05em; border-bottom: 1px solid rgba(230,192,104,.2); padding-bottom: 6px; }
+        .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: .75rem; font-weight: 700; margin-left: 6px; }
+        .badge-admin { background: rgba(230,192,104,.15); color: var(--gold); border: 1px solid var(--gold); }
+        .badge-quest { background: rgba(79,201,138,.15); color: #4fc98a; border: 1px solid #4fc98a; }
+        .badge-class { background: rgba(122,162,247,.15); color: #7aa2f7; border: 1px solid #7aa2f7; }
+
+        .progress-list { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 5px; }
+        .prog { font-size: 0.75rem; padding: 2px 6px; border-radius: 4px; background: #333; color: #888; }
+        .prog.done { background: #1f9d5a; color: #fff; }
+    </style>
+</head>
+<body>
+<div class="page">
+    <div class="toolbar">
+        <a class="back-inline" th:href="@{/}">← На главную</a>
+        <span style="color:var(--gold); font-weight:700;">👑 Админ-панель</span>
+    </div>
+
+    <p th:if="${message}" th:text="${message}" class="flash"></p>
+
+    <h1 class="title">Админ-панель</h1>
+
+    <div style="text-align:center; margin-bottom:20px;">
+        <a href="/admin/items" class="btn" style="text-decoration:none;">📦 Управление предметами</a>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="admin-grid">
+        <div class="user-card" th:each="u : ${users}">
+            <h3>
+                <span th:text="${u.displayName}">Имя</span>
+                <span class="badge badge-admin" th:if="${u.admin}">ADMIN</span>
+                <span class="badge badge-quest" th:if="${u.questActive}">В КВЕСТЕ</span>
+                <span class="badge badge-class" th:if="${u.heroClass != null}"
+                      th:text="${u.heroClass.icon} + ' ' + ${u.heroClass.title}"></span>
+            </h3>
+
+            <div class="user-meta">
+                Логин: <b th:text="${u.username}"></b><br>
+                Золото: <b th:text="${u.gold}"></b><br>
+                Сюжет: <b th:text="${u.storyProgress} + ' / 7'"></b><br>
+                Квесты: <b th:text="${u.wins}"></b> побед / <b th:text="${u.losses}"></b> поражений<br>
+                Очки навыков: <b th:text="${u.skillPoints}"></b>
+            </div>
+
+            <!-- ПРОКАЧКА СТАТОВ (с учетом экипировки) -->
+            <div class="admin-section-title">📊 Характеристики</div>
+            <div class="stat-block">
+                <span>💪 STR: <b th:text="${u.heroClass != null ? u.heroClass.strength + u.skillStrBonus : 0}"></b></span>
+                <span>🔮 MAG: <b th:text="${u.heroClass != null ? u.heroClass.magic + u.skillMagBonus : 0}"></b></span>
+                <span>🏹 AGI: <b th:text="${u.heroClass != null ? u.heroClass.agility + u.skillAgiBonus : 0}"></b></span>
+            </div>
+
+            <div class="user-actions">
+                <form th:action="@{|/admin/users/${u.id}/add-stat|}" method="post">
+                    <select name="stat">
+                        <option value="str">💪 STR</option>
+                        <option value="mag">🔮 MAG</option>
+                        <option value="agi">🏹 AGI</option>
+                    </select>
+                    <input type="number" name="amount" value="1" min="1" max="100">
+                    <button type="submit" class="btn-small">Прокачать</button>
+                </form>
+            </div>
+
+            <div class="user-actions">
+                <form th:action="@{|/admin/users/${u.id}/add-skill-point|}" method="post">
+                    <input type="number" name="amount" value="1" min="1" max="50">
+                    <button type="submit" class="btn-small">Дать очки</button>
+                </form>
+            </div>
+
+            <!-- КАРТА (Открытые локации) -->
+            <div class="admin-section-title">🗺️ Открытые локации</div>
+            <div class="progress-list">
+                <span class="prog" th:classappend="${u.storyProgress >= 0} ? 'done'">Лес</span>
+                <span class="prog" th:classappend="${u.storyProgress >= 1} ? 'done'">Топи</span>
+                <span class="prog" th:classappend="${u.storyProgress >= 2} ? 'done'">Руины</span>
+                <span class="prog" th:classappend="${u.storyProgress >= 3} ? 'done'">Снега</span>
+                <span class="prog" th:classappend="${u.storyProgress >= 4} ? 'done'">Вулкан</span>
+                <span class="prog" th:classappend="${u.storyProgress >= 5} ? 'done'">Равнины</span>
+                <span class="prog" th:classappend="${u.storyProgress >= 6} ? 'done'">Драконы</span>
+            </div>
+
+            <!-- УПРАВЛЕНИЕ КЛАССОМ -->
+            <div class="admin-section-title">🎭 Класс</div>
+            <div class="user-actions">
+                <form th:action="@{|/admin/users/${u.id}/set-class|}" method="post">
+                    <select name="heroClass">
+                        <option value="WARRIOR" th:selected="${u.heroClass != null and u.heroClass.name() == 'WARRIOR'}">⚔️ Воин</option>
+                        <option value="MAGE"    th:selected="${u.heroClass != null and u.heroClass.name() == 'MAGE'}">🔮 Маг</option>
+                        <option value="ARCHER"  th:selected="${u.heroClass != null and u.heroClass.name() == 'ARCHER'}">🏹 Лучник</option>
+                    </select>
+                    <button type="submit" class="btn-small">Сменить</button>
+                </form>
+                <form th:action="@{|/admin/users/${u.id}/reset-class|}" method="post">
+                    <button type="submit" class="btn-small btn-danger">Сбросить класс</button>
+                </form>
+            </div>
+
+            <!-- СЮЖЕТ -->
+            <div class="admin-section-title">📜 Сюжет</div>
+            <div class="user-actions">
+                <form th:action="@{|/admin/users/${u.id}/skip-story|}" method="post"><button class="btn-small">Пропустить главу</button></form>
+                <form th:action="@{|/admin/users/${u.id}/unlock-all|}" method="post"><button class="btn-small">Открыть всё</button></form>
+                <form th:action="@{|/admin/users/${u.id}/reset-story|}" method="post"><button class="btn-small btn-danger">Сброс сюжета</button></form>
+            </div>
+
+            <!-- КВЕСТ -->
+            <div class="admin-section-title">🧭 Квест</div>
+            <div class="user-actions">
+                <form th:action="@{|/admin/users/${u.id}/force-finish|}" method="post"><button class="btn-small">Завершить (успех)</button></form>
+                <form th:action="@{|/admin/users/${u.id}/cancel-quest|}" method="post"><button class="btn-small btn-danger">Отменить квест</button></form>
+            </div>
+
+            <!-- РЕСУРСЫ -->
+            <div class="admin-section-title">💰 Ресурсы</div>
+            <div class="user-actions">
+                <form th:action="@{|/admin/users/${u.id}/add-gold|}" method="post">
+                    <input type="number" name="amount" value="500" min="1">
+                    <button type="submit" class="btn-small">Дать золото</button>
+                </form>
+                <form th:action="@{|/admin/users/${u.id}/reset-gold|}" method="post"><button class="btn-small btn-danger">Сбросить баланс</button></form>
+            </div>
+
+            <div class="user-actions">
+                <form th:action="@{|/admin/users/${u.id}/give-item|}" method="post">
+                    <select name="itemId">
+                        <option th:each="it : ${items}" th:value="${it.id}" th:text="${it.icon} + ' ' + ${it.name}"></option>
+                    </select>
+                    <button type="submit" class="btn-small">Выдать предмет</button>
+                </form>
+            </div>
+
+            <!-- ДОСТИЖЕНИЯ -->
+            <div class="admin-section-title">🏅 Достижения</div>
+            <div class="user-actions">
+                <form th:action="@{|/admin/users/${u.id}/clear-achievements|}" method="post"><button class="btn-small btn-danger">Очистить достижения</button></form>
+            </div>
+
+            <!-- ПАРОЛЬ -->
+            <div class="admin-section-title">🔑 Пароль</div>
+            <div class="user-actions">
+                <form th:action="@{|/admin/users/${u.id}/reset-password|}" method="post">
+                    <input type="text" name="newPassword" placeholder="Новый пароль" minlength="6">
+                    <button type="submit" class="btn-small">Сменить</button>
+                </form>
+            </div>
+
+            <!-- ОПАСНЫЕ -->
+            <div class="admin-section-title" style="color:#e0584a;">⚠️ Опасные действия</div>
+            <div class="user-actions">
+                <form th:action="@{|/admin/users/${u.id}/toggle-admin|}" method="post">
+                    <button type="submit" class="btn-small" th:text="${u.admin ? 'Снять админа' : 'Сделать админом'}"></button>
+                </form>
+                <form th:action="@{|/admin/users/${u.id}/delete|}" method="post">
+                    <button type="submit" class="btn-small btn-danger">Удалить</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <p th:if="${users.isEmpty()}" class="empty">Пользователей нет.</p>
+</div>
+</body>
+</html>

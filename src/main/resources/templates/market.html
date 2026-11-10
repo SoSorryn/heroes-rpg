@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="ru" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Рынок</title>
+    <link rel="stylesheet" th:href="@{/css/style.css}">
+    <style>
+        .market-layout {
+            display: grid;
+            grid-template-columns: 1fr 320px;
+            gap: 20px;
+            align-items: start;
+        }
+        @media (max-width: 960px) {
+            .market-layout { grid-template-columns: 1fr; }
+        }
+        .market-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+            gap: 16px;
+            margin-top: 20px;
+        }
+        .item-card {
+            position: relative;
+            background: rgba(0, 0, 0, .28);
+            border: 1px solid var(--border-soft);
+            border-radius: 12px;
+            padding: 16px;
+            text-align: center;
+            transition: transform .3s var(--ease), border-color .3s, box-shadow .3s;
+        }
+        .item-card:hover {
+            transform: translateY(-4px);
+            border-color: rgba(230, 192, 104, .5);
+            box-shadow: 0 10px 26px rgba(0, 0, 0, .4);
+        }
+        .item-card.is-discount {
+            border-color: rgba(192, 57, 43, .65);
+            box-shadow: 0 0 22px rgba(192, 57, 43, .25);
+        }
+
+        /* Картинка предмета */
+        .item-card .item-img-box {
+            height: 80px; display: flex; justify-content: center; align-items: center; margin-bottom: 8px;
+        }
+        .item-card img { max-height: 100%; max-width: 100%; object-fit: contain; filter: drop-shadow(0 4px 8px rgba(0,0,0,0.5)); }
+        .item-card .item-icon { font-size: 2.4rem; line-height: 1; }
+
+        .item-card .item-name { font-weight: 700; margin-bottom: 4px; }
+        .item-card .item-meta { font-size: .8rem; color: var(--text-dim); margin-bottom: 8px; }
+        .item-card .item-bonuses { display: flex; justify-content: center; gap: 8px; flex-wrap: wrap; font-weight: 700; font-size: .85rem; margin-bottom: 10px; }
+        .item-card .item-price { font-size: 1.1rem; margin-bottom: 10px; }
+        .item-card form { margin: 0; }
+
+        .my-inventory {
+            position: sticky;
+            top: 20px;
+        }
+        .my-inv-list { display: flex; flex-direction: column; gap: 8px; max-height: 70vh; overflow-y: auto; }
+        .my-inv-item {
+            display: flex; align-items: center; gap: 10px;
+            padding: 8px 10px; border-radius: 10px;
+            border: 1px solid var(--border-soft);
+            background: rgba(0, 0, 0, .28);
+            transition: border-color .2s, transform .2s;
+        }
+        .my-inv-item:hover { border-color: var(--gold); transform: translateX(2px); }
+
+        .my-inv-img-box { width: 32px; height: 32px; display: flex; justify-content: center; align-items: center; flex-shrink: 0; }
+        .my-inv-img-box img { max-width: 100%; max-height: 100%; object-fit: contain; }
+        .my-inv-img-box .my-inv-icon { font-size: 1.4rem; }
+
+        .my-inv-info { flex: 1; min-width: 0; }
+        .my-inv-name {
+            font-size: .9rem; font-weight: 600;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .my-inv-meta { font-size: .75rem; color: var(--text-dim); }
+        .my-inv-item button { flex-shrink: 0; }
+        .empty-myinv { text-align: center; color: var(--text-dim); padding: 16px; font-size: .9rem; }
+
+        @media (max-width: 720px) {
+            .market-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; }
+        }
+    </style>
+</head>
+<body>
+<div class="page">
+    <div class="toolbar">
+        <a class="back-inline" th:href="@{/}">← На главную</a>
+        <span class="gold-chip" style="color:var(--gold); font-weight:700;">💰 <span th:text="${user.gold}"></span> золота</span>
+    </div>
+
+    <p th:if="${message}" th:text="${message}" class="flash"></p>
+
+    <h1 class="title">🏪 Рынок</h1>
+    <div class="divider"></div>
+
+    <div class="market-layout">
+        <div>
+            <div class="filter-bar">
+                <a class="filter-btn" th:classappend="${currentSort == null} ? 'active'" th:href="@{/market}">По имени</a>
+                <a class="filter-btn" th:classappend="${currentSort == 'price_asc'} ? 'active'" th:href="@{/market(sort='price_asc')}">Цена ↑</a>
+                <a class="filter-btn" th:classappend="${currentSort == 'price_desc'} ? 'active'" th:href="@{/market(sort='price_desc')}">Цена ↓</a>
+                <a class="filter-btn" th:classappend="${currentSort == 'rarity'} ? 'active'" th:href="@{/market(sort='rarity')}">Редкость</a>
+                <a class="filter-btn" th:classappend="${currentSlot == 'WEAPON'} ? 'active'" th:href="@{/market(slot='WEAPON')}">Оружие</a>
+                <a class="filter-btn" th:classappend="${currentSlot == 'HELMET'} ? 'active'" th:href="@{/market(slot='HELMET')}">Шлем</a>
+                <a class="filter-btn" th:classappend="${currentSlot == 'CHEST'} ? 'active'" th:href="@{/market(slot='CHEST')}">Броня</a>
+                <a class="filter-btn" th:classappend="${currentSlot == 'RING'} ? 'active'" th:href="@{/market(slot='RING')}">Кольцо</a>
+            </div>
+
+            <div class="market-grid">
+                <div class="item-card" th:each="item : ${allItems}"
+                     th:classappend="${item.id == discountItemId} ? 'is-discount'">
+                    <div th:if="${item.id == discountItemId}" class="discount-badge">−30%</div>
+
+                    <!-- КАРТИНКА ИЛИ ЭМОДЗИ -->
+                    <div class="item-img-box">
+                        <img th:if="${item.imageName != null and !item.imageName.isEmpty()}"
+                             th:src="@{|/images/item_icons/${item.imageName}|}"
+                             onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+                        <div class="item-icon" th:text="${item.icon}" style="display:none;"></div>
+                    </div>
+
+                    <div class="item-name" th:text="${item.name}" th:classappend="'rarity-' + ${item.rarity}">Предмет</div>
+                    <div class="item-meta" th:text="${item.type} + ' · ' + ${item.slot}">Тип</div>
+                    <div class="item-bonuses">
+                        <span th:if="${item.bonusStr > 0}" th:text="'STR +' + ${item.bonusStr}" style="color:#e0584a;"></span>
+                        <span th:if="${item.bonusMag > 0}" th:text="'MAG +' + ${item.bonusMag}" style="color:#7aa2f7;"></span>
+                        <span th:if="${item.bonusAgi > 0}" th:text="'AGI +' + ${item.bonusAgi}" style="color:#4fc98a;"></span>
+                    </div>
+                    <div class="item-price">
+                        <span th:if="${item.id == discountItemId}"
+                              style="text-decoration: line-through; color: var(--text-dim); font-size: .85em;"
+                              th:text="${item.price}"></span>
+                        <span th:text="${item.id == discountItemId ? T(java.lang.Math).round(item.price * 0.7) : item.price}"
+                              style="color: var(--gold); font-weight: 700;"></span>
+                        <span style="color: var(--text-dim);"> 💰</span>
+                    </div>
+                    <form th:action="@{|/market/buy/${item.id}|}" method="post">
+                        <button type="submit" class="btn-small">Купить</button>
+                    </form>
+                </div>
+            </div>
+
+            <p th:if="${allItems.isEmpty()}" class="empty">Нет предметов по выбранному фильтру.</p>
+        </div>
+
+        <aside class="panel my-inventory">
+            <h2 style="color:var(--gold); margin-top:0;">💰 Мой инвентарь</h2>
+            <p style="color:var(--text-dim); font-size:.85rem; margin:0 0 12px;">
+                Продажа — 50% цены. Надетые предметы не отображаются, сначала снимите их.
+            </p>
+
+            <div class="my-inv-list">
+                <div class="my-inv-item" th:each="it : ${mySellable}">
+
+                    <!-- КАРТИНКА ИЛИ ЭМОДЗИ -->
+                    <div class="my-inv-img-box">
+                        <img th:if="${it.imageName != null and !it.imageName.isEmpty()}"
+                             th:src="@{|/images/item_icons/${it.imageName}|}"
+                             onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+                        <span class="my-inv-icon" th:text="${it.icon}" style="display:none;">🎁</span>
+                    </div>
+
+                    <div class="my-inv-info">
+                        <div class="my-inv-name" th:text="${it.name}" th:classappend="'rarity-' + ${it.rarity}">Предмет</div>
+                        <div class="my-inv-meta" th:text="'продажа за ' + ${it.price / 2}"></div>
+                    </div>
+                    <form th:action="@{|/market/sell/${it.id}|}" method="post" style="margin:0;">
+                        <button type="submit" class="btn-small">Продать</button>
+                    </form>
+                </div>
+            </div>
+            <p class="empty-myinv" th:if="${mySellable.isEmpty()}">Нет предметов для продажи.</p>
+        </aside>
+    </div>
+</div>
+</body>
+</html>

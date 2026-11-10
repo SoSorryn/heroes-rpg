@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="ru" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Карта мира</title>
+    <link rel="stylesheet" th:href="@{/css/style.css}">
+    <style>
+        .gold-chip { display: inline-flex; align-items: center; gap: 6px; margin-left: 10px; padding: 4px 12px; border-radius: 999px; font-weight: 700; color: var(--gold); background: rgba(230,192,104,.1); border: 1px solid rgba(230,192,104,.35); animation: legendary 2.4s ease-in-out infinite alternate; }
+
+        .modal-back { position: fixed; inset: 0; z-index: 900; display: none; align-items: center; justify-content: center; background: rgba(3,4,14,.7); backdrop-filter: blur(5px); }
+        .modal-back.show { display: flex; animation: flashIn .3s var(--ease) both; }
+        .modal { max-width: 440px; width: 90%; padding: 28px; text-align: center; border-radius: 18px; background: rgba(14,16,40,.96); border: 1px solid var(--gold); box-shadow: 0 20px 60px rgba(0,0,0,.6), 0 0 40px rgba(230,192,104,.25); animation: cardIn .4s var(--ease) both; }
+        .modal h3 { margin: 0 0 8px; color: var(--gold); font-size: 1.3rem; }
+        .modal p { color: var(--text-dim); margin: 0 0 20px; line-height: 1.6; text-align: left; }
+        .modal .row { display: flex; gap: 12px; justify-content: center; }
+
+        .map-point.ready:not(:hover) { background: radial-gradient(circle at 35% 30%, #8cf5bb, #1f9d5a) !important; box-shadow: 0 0 14px rgba(79,201,138,.95) !important; }
+        .map-point.ready::before { border-color: rgba(79,201,138,.75) !important; }
+        .map-point.close:not(:hover) { background: radial-gradient(circle at 35% 30%, #ffe08a, #d08a12) !important; box-shadow: 0 0 14px rgba(255,190,60,.9) !important; }
+        .map-point.close::before { border-color: rgba(255,190,60,.75) !important; }
+        .map-point.hard:not(:hover) { background: radial-gradient(circle at 35% 30%, #ff7b6b, #d11f1f) !important; box-shadow: 0 0 14px rgba(255,60,60,.9) !important; }
+        .map-point.hard::before { border-color: rgba(255,90,90,.7) !important; }
+
+        .map-point.locked:not(:hover) { background: radial-gradient(circle at 35% 30%, #6b6b6b, #2a2a2a) !important; box-shadow: 0 0 10px rgba(120,120,120,.5) !important; border-color: #888 !important; cursor: not-allowed; }
+        .map-point.locked::before { border-color: rgba(120,120,120,.5) !important; }
+        .map-point.locked::after { content: '🔒'; font-size: 14px; }
+
+        .map-point.daily { width: 38px; height: 38px; font-size: 20px; border-color: #fff2c4; }
+        .map-point.daily::before { inset: -10px; border-color: rgba(255,230,140,.9); border-width: 3px; }
+
+        .map-legend { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; margin-top: 14px; font-size: .85rem; color: var(--text-dim); }
+        .map-legend i { display: inline-block; width: 11px; height: 11px; border-radius: 50%; margin-right: 6px; vertical-align: -1px; }
+
+        .path-svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 4; overflow: visible; }
+        .path-glow { fill: none; stroke: rgba(230,192,104,.25); stroke-width: 2.5; stroke-linecap: round; filter: blur(2px); }
+        .path-draw { fill: none; stroke: var(--gold); stroke-width: 1; stroke-linecap: round; stroke-dasharray: 200; stroke-dashoffset: 200; filter: drop-shadow(0 0 1.5px var(--gold)); }
+        .path-draw.animate { animation: drawPath .9s ease-out forwards; }
+        @keyframes drawPath { to { stroke-dashoffset: 0; } }
+
+        .map-time { position: absolute; inset: 0; z-index: 2; pointer-events: none; transition: background 2s; }
+        .map-time.night { background: linear-gradient(rgba(8,14,60,.55), rgba(10,10,40,.45)); }
+        .map-time.dawn  { background: linear-gradient(rgba(255,150,90,.22), rgba(255,200,140,.08)); }
+        .map-time.dusk  { background: linear-gradient(rgba(255,110,60,.25), rgba(90,40,110,.25)); }
+        .time-chip { position: absolute; top: 12px; left: 12px; z-index: 4; padding: 5px 12px; border-radius: 999px; font-size: .8rem; font-weight: 600; background: rgba(8,10,28,.85); border: 1px solid var(--gold); color: var(--gold); backdrop-filter: blur(6px); }
+        .cloud { position: absolute; z-index: 2; pointer-events: none; width: 38%; height: 26%; background: radial-gradient(closest-side, rgba(255,255,255,.16), transparent); filter: blur(10px); animation: cloudDrift 70s linear infinite; }
+        @keyframes cloudDrift { from { transform: translateX(-70%); } to { transform: translateX(290%); } }
+        .dragon { position: absolute; z-index: 4; font-size: 34px; cursor: pointer; user-select: none; filter: drop-shadow(0 10px 6px rgba(0,0,0,.65)); animation: dragonFly 16s linear forwards, dragonWobble 1s ease-in-out infinite alternate; }
+        @keyframes dragonFly { from { left: 108%; } to { left: -8%; } }
+        @keyframes dragonWobble { from { transform: translateY(-6px) rotate(-6deg); } to { transform: translateY(8px) rotate(6deg); } }
+
+        .hub-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+        .hub-card { background: rgba(0,0,0,.28); border: 1px solid var(--border-soft); border-radius: 12px; padding: 16px; transition: transform .3s var(--ease), border-color .3s, box-shadow .3s; }
+        .hub-card:hover { transform: translateY(-4px); border-color: rgba(230,192,104,.5); box-shadow: 0 10px 26px rgba(0,0,0,.4); }
+        .hub-h { color: var(--gold); font-weight: 700; margin-bottom: 8px; }
+        .hub-name { font-size: 1.15rem; font-weight: 700; margin-bottom: 4px; }
+        .hub-sub { color: var(--text-dim); font-size: .88rem; line-height: 1.5; margin-bottom: 10px; }
+        .hub-sub b { color: var(--gold); }
+        @media (max-width: 720px) { .hub-grid { grid-template-columns: 1fr; } }
+
+        .story-panel { border-color: var(--gold) !important; background: linear-gradient(135deg, rgba(230,192,104,.06), rgba(0,0,0,.28)) !important; box-shadow: 0 0 30px rgba(230,192,104,.15); }
+        .story-chapter { font-size: 1.15rem; font-weight: 700; color: var(--gold); margin-bottom: 8px; }
+        .story-text { color: var(--text-dim); line-height: 1.7; font-style: italic; }
+        .story-text b { color: var(--gold); font-style: normal; }
+
+        /* ===== АРЕНА БОЯ ===== */
+        .battle-arena {
+            display: flex; justify-content: space-around; align-items: center;
+            height: 350px; background: rgba(0,0,0,0.8); border-radius: 12px;
+            border: 1px solid var(--gold); padding: 20px; margin-top: 20px;
+            position: relative; overflow: hidden;
+        }
+        .combatant { text-align: center; width: 200px; position: relative; z-index: 2; }
+        .avatar { font-size: 64px; transition: transform 0.1s; display: inline-block; }
+
+        /* Стили для картинок игрока и врага */
+        .player-img { max-height: 250px; max-width: 200px; object-fit: contain; filter: drop-shadow(0 10px 20px rgba(0,0,0,0.8)); }
+        .enemy-img { max-height: 250px; max-width: 200px; object-fit: contain; filter: drop-shadow(0 10px 20px rgba(0,0,0,0.8)); }
+
+        .player-img.attack-player { transform: translateX(60px) scale(1.1); }
+        .enemy-img.attack-enemy { transform: translateX(-60px) scale(1.05); }
+        .player-img.hurt, .enemy-img.hurt { filter: drop-shadow(0 0 25px red) brightness(1.5); }
+
+        .hp-bar-bg { width: 100%; height: 18px; background: #222; border-radius: 9px; margin-top: 15px; overflow: hidden; border: 2px solid #444; box-shadow: inset 0 2px 6px rgba(0,0,0,0.8); }
+        .hp-bar-fill { height: 100%; background: linear-gradient(90deg, #2d7a52, #4fc98a); width: 100%; transition: width 0.2s linear; }
+        .hp-bar-fill.enemy { background: linear-gradient(90deg, #8a2b25, #e0584a); }
+
+        .dmg-popup { position: absolute; color: #fff; font-weight: 900; font-size: 28px; text-shadow: 0 2px 6px #000; animation: floatUp 0.8s forwards; pointer-events: none; z-index: 10; }
+        @keyframes floatUp { 0% { opacity: 1; transform: translateY(0) scale(1); } 100% { opacity: 0; transform: translateY(-80px) scale(1.5); } }
+
+        .gear-grid-img { height: 64px; display:flex; justify-content:center; align-items:center; }
+    </style>
+</head>
+<body>
+<div class="toast-wrap" id="toasts"></div>
+
+<div class="modal-back" id="modal">
+    <div class="modal">
+        <h3 id="modalTitle">Отправиться?</h3>
+        <p id="modalText">Это займет от 5 до 20 минут.</p>
+        <div class="row">
+            <button class="btn" id="modalYes">В путь!</button>
+            <button class="btn-small" id="modalNo" style="padding:12px 20px; font-size:.95rem;">Отмена</button>
+        </div>
+    </div>
+</div>
+
+<div class="page">
+    <div class="toolbar" style="margin-bottom:24px;">
+        <div>
+            👤 <strong sec:authentication="name">user</strong>
+            <span class="gold-chip" th:if="${user != null}">💰 <span th:text="${user.gold}" data-count></span></span>
+        </div>
+        <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
+            <a class="back-inline" th:href="@{/market}">🏪 Рынок</a>
+            <a class="back-inline" th:href="@{/inventory}">🎒 Инвентарь</a>
+            <a class="back-inline" th:if="${user != null and user.admin}" th:href="@{/admin/users}" style="color:var(--gold); font-weight:700;">👑 Админ-панель</a>
+            <form th:action="@{/logout}" method="post" style="margin:0;"><button class="btn-small btn-danger" type="submit">Выйти</button></form>
+        </div>
+    </div>
+
+    <p th:if="${message}" th:text="${message}" class="flash"></p>
+
+    <div th:if="${user.heroClass == null}" class="panel" style="margin-bottom: 20px;">
+        <h2 style="text-align:center; color:var(--gold);">⚜️ Выберите свой класс</h2>
+        <div style="display:flex; justify-content:center; gap:20px; margin-top:20px; flex-wrap:wrap;">
+            <form th:action="@{/profile/select-class}" method="post" th:each="hc : ${T(com.example.heroes.model.HeroClass).values()}" class="class-card" style="text-align:center;">
+                <input type="hidden" name="heroClass" th:value="${hc.name()}">
+                <button type="submit" class="btn" style="display:flex; flex-direction:column; height:100px; width:150px; justify-content:center; align-items:center;">
+                    <span th:text="${hc.icon}" style="font-size:28px;"></span>
+                    <span th:text="${hc.title}" style="font-weight:bold;"></span>
+                </button>
+                <p th:text="${hc.description}" style="font-size:12px; width:150px; margin-top:8px; color:var(--text-dim);"></p>
+            </form>
+        </div>
+    </div>
+
+    <div th:if="${user.heroClass != null}">
+        <h1 class="title">Карта Мира</h1>
+        <div class="divider"></div>
+
+        <!-- СЮЖЕТ -->
+        <div class="panel story-panel" style="margin-bottom:20px;" th:with="sp=${storyProgress != null ? storyProgress : 0}">
+            <h2 style="color:var(--gold); margin-top:0;">📜 Хроника мира</h2>
+            <div th:if="${sp == 0}"><div class="story-chapter">Глава 1: Тишина перед бурей</div><div class="story-text">Древний Дракон <b>Акатош</b> пробудился. Найдите артефакт в <b>Лесу Глубокой Тени</b>.</div></div>
+            <div th:if="${sp == 1}"><div class="story-chapter">Глава 2: Шёпот болот</div><div class="story-text">Амулет Теней указывает на <b>Топи Забвения</b>.</div></div>
+            <div th:if="${sp == 2}"><div class="story-chapter">Глава 3: Забытые пророчества</div><div class="story-text">Нужно древнее оружие. Путь лежит в <b>Священные Руины</b>.</div></div>
+            <div th:if="${sp == 3}"><div class="story-chapter">Глава 4: Ледяной союз</div><div class="story-text">Оружие закаляется в вечном льду. Идите на <b>Снежные Вершины</b>.</div></div>
+            <div th:if="${sp == 4}"><div class="story-chapter">Глава 5: Пламя кузни</div><div class="story-text">Наполните клинок силой огня в <b>Пепельных Высотах</b>.</div></div>
+            <div th:if="${sp == 5}"><div class="story-chapter">Глава 6: Дорога палачей</div><div class="story-text">Прорвитесь через <b>Равнины Палачей</b>.</div></div>
+            <div th:if="${sp == 6}"><div class="story-chapter">Глава 7: Логово Дракона</div><div class="story-text">Финальная битва на <b>Острове Драконов</b>.</div></div>
+            <div th:if="${sp == 7}"><div class="story-chapter" style="color:#8cf5bb;">Эпилог: Новая Эра</div><div class="story-text">Вы спасли мир. Теперь вы — <b>Легенда</b>.</div></div>
+        </div>
+
+        <!-- ПАНЕЛЬ ПЕРСОНАЖА С ПРОКАЧКОЙ -->
+        <div class="panel" style="margin-bottom: 20px;">
+            <h2 style="color:var(--gold); margin-top:0;">Меню персонажа</h2>
+            <div class="stats-grid">
+                <div class="stat-box" style="display: flex; align-items: center; gap: 15px;">
+                    <!-- ЗАМЕНА ЭМОДЗИ НА КАРТИНКУ КЛАССА В МЕНЮ (.PNG) -->
+                    <img th:src="@{|/images/hero-${#strings.toLowerCase(user.heroClass.code)}.png|}"
+                         alt="Класс"
+                         style="width: 80px; height: 80px; object-fit: contain; filter: drop-shadow(0 0 10px rgba(230,192,104,0.3));"
+                         onerror="this.style.display='none'">
+                    <div>
+                        <div style="color:var(--text-dim);">Класс</div>
+                        <div class="stat-val"><span th:text="${user.heroClass.title}"></span></div>
+                    </div>
+                </div>
+                <div class="stat-box">
+                    <div style="color:var(--text-dim);">Характеристики (с экипировкой)</div>
+                    <div style="display:flex; gap:14px; flex-wrap:wrap; margin-top:6px;">
+                        <span>💪 STR: <span class="stat-val" th:text="${totalStr}" data-count>0</span></span>
+                        <span>🔮 MAG: <span class="stat-val" th:text="${totalMag}" data-count>0</span></span>
+                        <span>🏹 AGI: <span class="stat-val" th:text="${totalAgi}" data-count>0</span></span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="panel" style="margin-top:15px; text-align:center; background: rgba(230,192,104,.05); border-color: var(--gold);">
+                <h3 style="color:var(--gold); margin-top:0;">✨ Прокачка навыков</h3>
+                <p style="color:var(--text-dim); font-size:.9rem; margin-bottom:12px;">
+                    Свободных очков: <b th:text="${user.skillPoints}" style="color:var(--gold); font-size:1.2rem;">0</b>
+                    <br><span style="font-size:.75rem;">Каждые 3 победы в квестах дают +1 очко</span>
+                </p>
+
+                <div style="display:flex; justify-content:center; gap:15px; flex-wrap:wrap;">
+                    <div class="stat-box" style="flex:1; min-width:100px; text-align:center;">
+                        <div style="color:var(--text-dim);">💪 STR</div>
+                        <div class="stat-val" th:text="${totalStr}">0</div>
+                        <button class="btn-small" style="width:100%; margin-top:8px;"
+                                th:disabled="${user.skillPoints < 1}" onclick="upStat('str')">+1</button>
+                    </div>
+                    <div class="stat-box" style="flex:1; min-width:100px; text-align:center;">
+                        <div style="color:var(--text-dim);">🔮 MAG</div>
+                        <div class="stat-val" th:text="${totalMag}">0</div>
+                        <button class="btn-small" style="width:100%; margin-top:8px;"
+                                th:disabled="${user.skillPoints < 1}" onclick="upStat('mag')">+1</button>
+                    </div>
+                    <div class="stat-box" style="flex:1; min-width:100px; text-align:center;">
+                        <div style="color:var(--text-dim);">🏹 AGI</div>
+                        <div class="stat-val" th:text="${totalAgi}">0</div>
+                        <button class="btn-small" style="width:100%; margin-top:8px;"
+                                th:disabled="${user.skillPoints < 1}" onclick="upStat('agi')">+1</button>
+                    </div>
+                </div>
+            </div>
+
+            <h3 style="color:var(--gold); margin-top:20px;">Надетое снаряжение</h3>
+            <div class="gear-grid">
+                <!-- Оружие -->
+                <div class="gear-slot">
+                    <div>🗡️ Оружие</div>
+                    <div class="gear-grid-img">
+                        <img th:if="${user.weapon != null and user.weapon.imageName != null}"
+                             th:src="@{|/images/item_icons/${user.weapon.imageName}|}"
+                             style="max-height:64px; object-fit:contain;"
+                             onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+                        <span th:text="${user.weapon != null ? user.weapon.icon : '—'}" style="font-size:1.8rem; display:none;"></span>
+                    </div>
+                    <div style="font-size:0.8rem; color:var(--text-dim);" th:text="${user.weapon != null ? user.weapon.name : 'Пусто'}"></div>
+                </div>
+                <!-- Шлем -->
+                <div class="gear-slot">
+                    <div>🪖 Шлем</div>
+                    <div class="gear-grid-img">
+                        <img th:if="${user.helmet != null and user.helmet.imageName != null}"
+                             th:src="@{|/images/item_icons/${user.helmet.imageName}|}"
+                             style="max-height:64px; object-fit:contain;"
+                             onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+                        <span th:text="${user.helmet != null ? user.helmet.icon : '—'}" style="font-size:1.8rem; display:none;"></span>
+                    </div>
+                    <div style="font-size:0.8rem; color:var(--text-dim);" th:text="${user.helmet != null ? user.helmet.name : 'Пусто'}"></div>
+                </div>
+                <!-- Броня -->
+                <div class="gear-slot">
+                    <div>🛡️ Броня</div>
+                    <div class="gear-grid-img">
+                        <img th:if="${user.chest != null and user.chest.imageName != null}"
+                             th:src="@{|/images/item_icons/${user.chest.imageName}|}"
+                             style="max-height:64px; object-fit:contain;"
+                             onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+                        <span th:text="${user.chest != null ? user.chest.icon : '—'}" style="font-size:1.8rem; display:none;"></span>
+                    </div>
+                    <div style="font-size:0.8rem; color:var(--text-dim);" th:text="${user.chest != null ? user.chest.name : 'Пусто'}"></div>
+                </div>
+                <!-- Кольцо -->
+                <div class="gear-slot">
+                    <div>💍 Кольцо</div>
+                    <div class="gear-grid-img">
+                        <img th:if="${user.ring != null and user.ring.imageName != null}"
+                             th:src="@{|/images/item_icons/${user.ring.imageName}|}"
+                             style="max-height:64px; object-fit:contain;"
+                             onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+                        <span th:text="${user.ring != null ? user.ring.icon : '—'}" style="font-size:1.8rem; display:none;"></span>
+                    </div>
+                    <div style="font-size:0.8rem; color:var(--text-dim);" th:text="${user.ring != null ? user.ring.name : 'Пусто'}"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- БОЙ -->
+        <div th:if="${user.questActive}" class="panel" id="questPanel">
+            <h2 style="color:var(--gold); text-align:center;">⚔️ Битва: <span th:text="${user.enemyName}"></span></h2>
+
+            <div class="battle-arena" id="battleArena"
+                 th:style="|background: url('/images/loc-${user.currentBiome.name().toLowerCase()}.png') center / cover no-repeat, rgba(0,0,0,0.85);|">
+                <div class="combatant">
+                    <!-- ЗАМЕНА ЭМОДЗИ ИГРОКА НА КАРТИНКУ (.PNG) -->
+                    <img class="player-img" id="playerAvatar"
+                         th:src="@{|/images/hero-${#strings.toLowerCase(user.heroClass.code)}.png|}"
+                         alt="Ваш герой">
+                    <div style="color:var(--gold); font-weight:700; font-size:1.2rem;">Вы</div>
+                    <div class="hp-bar-bg"><div class="hp-bar-fill" id="playerHpBar" style="width:100%"></div></div>
+                </div>
+                <div style="font-size: 48px; color: var(--gold);">⚔️</div>
+                <div class="combatant">
+                    <img class="enemy-img" id="enemyAvatar"
+                         th:src="|/images/${user.enemyImage}|"
+                         th:alt="${user.enemyName}"
+                         onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+                    <div class="avatar enemy-fallback" style="display:none; font-size:64px;">👹</div>
+                    <div style="color:#e0584a; font-weight:700; font-size:1.2rem;" th:text="${user.enemyName}"></div>
+                    <div class="hp-bar-bg"><div class="hp-bar-fill enemy" id="enemyHpBar" style="width:100%"></div></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- КАРТА -->
+        <div th:if="${!user.questActive}" class="map-container" id="mapContainer">
+            <img src="/images/img.png" alt="Карта" class="map-image" id="worldMap">
+            <svg class="path-svg" id="pathSvg" viewBox="0 0 100 100" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg"></svg>
+        </div>
+        <div th:if="${!user.questActive}" class="map-legend">
+            <span><i style="background:#2fbf74;"></i>Готов</span>
+            <span><i style="background:#e8a31c;"></i>Почти готов</span>
+            <span><i style="background:#d11f1f;"></i>Опасно</span>
+            <span><i style="background:#6b6b6b;"></i>Закрыто (по сюжету)</span>
+            <span>★ Локация дня</span>
+        </div>
+
+        <div th:if="${!user.questActive}" class="panel" style="margin-top:20px;">
+            <div class="hub-grid">
+                <div class="hub-card"><div class="hub-h">🌟 Локация дня</div><div id="dailyBox"></div></div>
+                <div class="hub-card"><div class="hub-h">🎯 Рекомендуем</div><div id="recoBox"></div><a class="btn-small" th:href="@{/market}" id="recoMarket" style="display:none;">🏪 На рынок</a></div>
+                <div class="hub-card"><div class="hub-h">📊 Мой прогресс</div><div id="progressBox"></div></div>
+            </div>
+        </div>
+
+        <div class="panel" style="margin-top:20px;">
+            <h2 style="color:var(--gold); margin-top:0;">🏅 Достижения</h2>
+            <div class="achievements">
+                <div class="ach" th:each="a : ${achievements}" th:classappend="${a.unlocked()} ? 'unlocked'">
+                    <div class="ach-icon" th:text="${a.achievement().icon}"></div>
+                    <div class="ach-name" th:text="${a.achievement().name}"></div>
+                    <div class="ach-desc" th:text="${a.achievement().description}"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel" style="margin-top:20px;">
+            <h2 style="color:var(--gold); margin-top:0;">⚔️ Дуэли</h2>
+            <div id="duelList" style="display:grid; gap:8px;"></div>
+        </div>
+
+        <div class="panel event-log" style="margin-top:20px;">
+            <h2 style="color:var(--gold); margin-top:0;">📜 Журнал событий</h2>
+            <ul id="logList"></ul>
+        </div>
+    </div>
+</div>
+
+<script th:inline="javascript">
+    const isQuestActive = /*[[${user.questActive}]]*/ false;
+    const LAST_BIOME = /*[[${user.lastBiome != null ? user.lastBiome.name() : ''}]]*/ '';
+    const STORY_PROGRESS = /*[[${storyProgress != null ? storyProgress : 0}]]*/ 0;
+
+    const stats = {
+        str: /*[[${totalStr}]]*/ 0,
+        mag: /*[[${totalMag}]]*/ 0,
+        agi: /*[[${totalAgi}]]*/ 0
+    };
+    stats.str = stats.str || 0; stats.mag = stats.mag || 0; stats.agi = stats.agi || 0;
+
+    const biomes = [
+        { id: 'FOREST', name: 'Лес Глубокой Тени', x: 32.5, y: 50.5, req: [14, 14, 14], requiredProgress: 0,
+            lore: 'Древний лес, где каждое дерево помнит шёпот прошлого. Говорят, в его чаще спрятан Амулет Теней.' },
+        { id: 'SWAMP', name: 'Топи Забвения', x: 42.0, y: 82.5, req: [16, 14, 18], requiredProgress: 1,
+            lore: 'Ядовитые топи, где время течёт иначе. Здесь обитает древний отшельник, знающий истинное имя Акатоша.' },
+        { id: 'RUINS', name: 'Священные Руины', x: 43.5, y: 30.0, req: [18, 22, 16], requiredProgress: 2,
+            lore: 'Осколки великой цивилизации. В стенах храма высечено пророчество о клинке.' },
+        { id: 'SNOW', name: 'Снежные Вершины', x: 58.0, y: 16.5, req: [18, 18, 16], requiredProgress: 3,
+            lore: 'Вечные льды, хранящие тайны ледяных стражей. Они закаляют оружие достойным.' },
+        { id: 'VOLCANO', name: 'Пепельные Высоты', x: 19.5, y: 24.0, req: [24, 24, 16], requiredProgress: 4,
+            lore: 'Огненные горы, где воздух плавит лёгкие. В сердце вулкана спит древний кузнец.' },
+        { id: 'PLAINS', name: 'Равнины Палачей', x: 66.5, y: 81.5, req: [24, 20, 22], requiredProgress: 5,
+            lore: 'Проклятые земли, где павшие воины не находят покоя. Армия тьмы перекрыла путь.' },
+        { id: 'DRAGON', name: 'Остров Драконов', x: 88.5, y: 67.0, req: [30, 30, 30], requiredProgress: 6,
+            lore: 'Финальная битва. Акатош ждёт на вершине вулкана. Никто не возвращался живым.' }
+    ];
+
+    function readiness(b) {
+        const s = [stats.str, stats.mag, stats.agi];
+        const avg = b.req.reduce((sum, need, i) => sum + Math.min(1, s[i] / need), 0) / 3;
+        return Math.floor(avg * 100);
+    }
+
+    function dailyBiome() {
+        return biomes[Math.floor(Date.now() / 86400000) % biomes.length];
+    }
+
+    function toast(text, ms = 3500) {
+        const el = document.createElement('div');
+        el.className = 'toast';
+        el.textContent = text;
+        document.getElementById('toasts').appendChild(el);
+        setTimeout(() => { el.classList.add('out'); setTimeout(() => el.remove(), 400); }, ms);
+    }
+
+    function confirmModal(title, text) {
+        return new Promise(resolve => {
+            const m = document.getElementById('modal');
+            document.getElementById('modalTitle').textContent = title;
+            document.getElementById('modalText').innerHTML = text;
+            m.classList.add('show');
+            const close = v => { m.classList.remove('show'); resolve(v); };
+            document.getElementById('modalYes').onclick = () => close(true);
+            document.getElementById('modalNo').onclick = () => close(false);
+            m.onclick = e => { if (e.target === m) close(false); };
+        });
+    }
+
+    document.querySelectorAll('[data-count]').forEach(el => {
+        const target = parseInt(el.textContent, 10);
+        if (isNaN(target) || target === 0) return;
+        const t0 = performance.now(), dur = 900;
+        const step = now => {
+            const p = Math.min((now - t0) / dur, 1);
+            el.textContent = Math.round(target * (1 - Math.pow(1 - p, 3)));
+            if (p < 1) requestAnimationFrame(step);
+        };
+        el.textContent = '0';
+        requestAnimationFrame(step);
+    });
+
+    /* ---------- Карта ---------- */
+    const mapEl = document.getElementById('mapContainer');
+    if (!isQuestActive && mapEl) {
+        biomes.forEach((b, i) => {
+            const point = document.createElement('div');
+            point.className = 'map-point';
+            point.style.left = b.x + '%';
+            point.style.top = b.y + '%';
+            point.style.animationDelay = (0.5 + i * 0.12) + 's, ' + (1.2 + i * 0.12) + 's';
+
+            const isLocked = STORY_PROGRESS < b.requiredProgress;
+            const pct = readiness(b);
+            const isDaily = b.id === dailyBiome().id;
+
+            if (isLocked) {
+                point.classList.add('locked');
+                point.dataset.name = b.name + ' · 🔒 Требуется Глава ' + (b.requiredProgress + 1);
+                point.innerHTML = '';
+                point.onclick = () => toast('🔒 Локация закрыта. Сначала пройдите Главу ' + (b.requiredProgress + 1) + '.', 3000);
+            } else {
+                point.classList.add(pct >= 100 ? 'ready' : pct >= 70 ? 'close' : 'hard');
+                if (isDaily) point.classList.add('daily');
+                point.dataset.name = b.name + ' · готовность ' + pct + '%' + (isDaily ? ' · 🌟 локация дня' : '');
+                point.innerHTML = isDaily ? '★' : '✖';
+                point.onclick = () => walkToBiome(b);
+            }
+            mapEl.appendChild(point);
+        });
+
+        initWorld(mapEl);
+    }
+
+    function getStartPoint() {
+        const last = biomes.find(b => b.id === LAST_BIOME);
+        if (last) return { x: last.x, y: last.y };
+        return { x: 50, y: 55 };
+    }
+
+    function drawPath(targetX, targetY) {
+        const svg = document.getElementById('pathSvg');
+        if (!svg) return Promise.resolve();
+        svg.innerHTML = '';
+        const start = getStartPoint();
+        const mid1X = start.x + (targetX - start.x) * 0.25 + (Math.random() - 0.5) * 6;
+        const mid1Y = start.y + (targetY - start.y) * 0.25 + (Math.random() - 0.5) * 6;
+        const mid2X = start.x + (targetX - start.x) * 0.55 + (Math.random() - 0.5) * 8;
+        const mid2Y = start.y + (targetY - start.y) * 0.55 + (Math.random() - 0.5) * 8;
+        const mid3X = start.x + (targetX - start.x) * 0.8 + (Math.random() - 0.5) * 6;
+        const mid3Y = start.y + (targetY - start.y) * 0.8 + (Math.random() - 0.5) * 6;
+
+        const d = `M ${start.x} ${start.y} C ${mid1X} ${mid1Y}, ${mid1X} ${mid1Y}, ${mid1X} ${mid1Y} S ${mid2X} ${mid2Y}, ${mid2X} ${mid2Y} S ${mid3X} ${mid3Y}, ${targetX} ${targetY}`;
+
+        const glow = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        glow.setAttribute('d', d);
+        glow.setAttribute('class', 'path-glow');
+        svg.appendChild(glow);
+
+        const line = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        line.setAttribute('d', d);
+        line.setAttribute('class', 'path-draw');
+        svg.appendChild(line);
+
+        requestAnimationFrame(() => line.classList.add('animate'));
+        return new Promise(resolve => setTimeout(resolve, 1100));
+    }
+
+    async function walkToBiome(biome) {
+        await drawPath(biome.x, biome.y);
+        const pct = readiness(biome);
+
+        const ok = await confirmModal(
+            '🧭 ' + biome.name,
+            '<i>' + biome.lore + '</i><br><br><b style="color:var(--gold);">Готовность: ' + pct + '%</b><br>Отправиться в путешествие?'
+        );
+
+        if (!ok) {
+            const svg = document.getElementById('pathSvg');
+            if (svg) svg.innerHTML = '';
+            return;
+        }
+        fetch('/api/quest/start', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: 'biome=' + biome.id
+        }).then(r => r.json()).then(data => {
+            toast(data.message, 2200);
+            logEvent(data.message);
+            setTimeout(() => location.reload(), 1400);
+        });
+    }
+
+    function initWorld(container) {
+        const h = new Date().getHours();
+        const phase = (h >= 22 || h < 5) ? ['night', '🌙 Ночь'] : h < 8 ? ['dawn', '🌅 Рассвет'] : h < 19 ? ['day', '☀️ День'] : ['dusk', '🌇 Закат'];
+        const overlay = document.createElement('div');
+        overlay.className = 'map-time ' + phase[0];
+        container.appendChild(overlay);
+        const chip = document.createElement('div');
+        chip.className = 'time-chip';
+        chip.textContent = phase[1];
+        container.appendChild(chip);
+
+        [ { top: 8, delay: 0 }, { top: 38, delay: -28 }, { top: 66, delay: -50 } ].forEach(({ top, delay }) => {
+            const c = document.createElement('div');
+            c.className = 'cloud';
+            c.style.top = top + '%';
+            c.style.animationDelay = delay + 's';
+            container.appendChild(c);
+        });
+
+        const dragonLines = ['Дракон пронёсся над картой и скрылся в облаках.', 'Вы заметили тень крыльев. Остров Драконов проснулся?', 'Древний дракон бросил на вас взгляд и улетел.'];
+        function spawnDragon() {
+            if (!document.hidden) {
+                const d = document.createElement('div');
+                d.className = 'dragon';
+                d.textContent = '🐉';
+                d.style.top = (15 + Math.random() * 60) + '%';
+                d.onclick = () => { toast(dragonLines[Math.floor(Math.random() * dragonLines.length)]); d.remove(); };
+                d.addEventListener('animationend', e => { if (e.animationName === 'dragonFly') d.remove(); });
+                container.appendChild(d);
+            }
+            setTimeout(spawnDragon, 40000 + Math.random() * 30000);
+        }
+        setTimeout(spawnDragon, 12000 + Math.random() * 10000);
+
+        const daily = dailyBiome();
+        document.getElementById('dailyBox').innerHTML = '<div class="hub-name">★ ' + daily.name + '</div><div class="hub-sub">Сегодня все слухи ведут сюда. Ваша готовность: <b>' + readiness(daily) + '%</b></div>';
+
+        const sum = b => b.req[0] + b.req[1] + b.req[2];
+        const ready = biomes.filter(b => STORY_PROGRESS >= b.requiredProgress && readiness(b) >= 100).sort((a, b) => sum(b) - sum(a));
+        const reco = document.getElementById('recoBox');
+
+        function isLocked(b) { return STORY_PROGRESS < b.requiredProgress; }
+
+        if (ready.length) {
+            reco.innerHTML = '<div class="hub-name">' + ready[0].name + '</div><div class="hub-sub">Самое сложное место, куда вы можете отправиться с уверенностью.</div>';
+            const next = biomes.filter(b => !isLocked(b) && readiness(b) < 100).sort((a, b) => sum(a) - sum(b))[0];
+            if (next) {
+                const need = [];
+                ['STR', 'MAG', 'AGI'].forEach((n, i) => {
+                    const have = [stats.str, stats.mag, stats.agi][i];
+                    if (have < next.req[i]) need.push(n + ' +' + (next.req[i] - have));
+                });
+                reco.innerHTML += '<div class="hub-sub">Следующая цель: <b>' + next.name + '</b>. Не хватает ' + need.join(', ') + '.</div>';
+                document.getElementById('recoMarket').style.display = 'inline-block';
+            }
+        } else {
+            const best = biomes.filter(b => !isLocked(b)).sort((a, b) => readiness(b) - readiness(a))[0];
+            const need = [];
+            ['STR', 'MAG', 'AGI'].forEach((n, i) => {
+                const have = [stats.str, stats.mag, stats.agi][i];
+                if (have < best.req[i]) need.push(n + ' +' + (best.req[i] - have));
+            });
+            reco.innerHTML = '<div class="hub-name">' + best.name + '</div><div class="hub-sub">Ближайшая цель. Не хватает: <b>' + need.join(', ') + '</b>. Загляните на рынок за снаряжением.</div>';
+            document.getElementById('recoMarket').style.display = 'inline-block';
+        }
+
+        const openedCount = biomes.filter(b => !isLocked(b)).length;
+        document.getElementById('progressBox').innerHTML =
+            '<div class="hub-name">' + openedCount + ' / 7</div>' +
+            '<div class="hub-sub">Локаций открыто. Продолжайте сюжет, чтобы открыть все земли.</div>';
+    }
+
+    /* ---------- МГНОВЕННЫЙ БОЙ (с отладкой) ---------- */
+    if (isQuestActive) {
+        fetch('/api/quest/combat-status').then(r => r.json()).then(data => {
+            let hpP = data.playerHp, hpE = data.enemyHp;
+            let maxP = data.playerMaxHp, maxE = data.enemyMaxHp;
+            let tick = 0;
+
+            const pAv = document.getElementById('playerAvatar');
+            const eAv = document.getElementById('enemyAvatar');
+            const pHp = document.getElementById('playerHpBar');
+            const eHp = document.getElementById('enemyHpBar');
+            const arena = document.getElementById('battleArena');
+
+            function dealDmg(target, amount) {
+                const av = target === 'player' ? pAv : eAv;
+                const bar = target === 'player' ? pHp : eHp;
+                av.classList.add('hurt');
+                setTimeout(() => av.classList.remove('hurt'), 200);
+
+                const rect = av.getBoundingClientRect();
+                const pop = document.createElement('div');
+                pop.className = 'dmg-popup';
+                pop.textContent = '-' + amount;
+                pop.style.left = (rect.left - arena.getBoundingClientRect().left + 60) + 'px';
+                pop.style.top = (rect.top - arena.getBoundingClientRect().top) + 'px';
+                pop.style.color = target === 'player' ? '#e0584a' : '#fff';
+                arena.appendChild(pop);
+                setTimeout(() => pop.remove(), 800);
+
+                if (target === 'player') { hpP -= amount; bar.style.width = Math.max(0, hpP / maxP * 100) + '%'; }
+                else { hpE -= amount; bar.style.width = Math.max(0, hpE / maxE * 100) + '%'; }
+            }
+
+            const interval = setInterval(() => {
+                if (hpE <= 0 || hpP <= 0) {
+                    clearInterval(interval);
+
+                    console.log("=== БОЙ ЗАВЕРШЕН ===");
+                    console.log("hpP =", hpP, "hpE =", hpE);
+
+                    setTimeout(() => {
+                        const url = '/api/quest/finish?playerHp=' + hpP;
+                        console.log("Отправляем запрос:", url);
+
+                        fetch(url, { method: 'POST' })
+                            .then(r => {
+                                console.log("Ответ сервера, статус:", r.status);
+                                if (!r.ok) throw new Error("HTTP " + r.status);
+                                return r.json();
+                            })
+                            .then(d => {
+                                console.log("Данные от сервера:", d);
+                                toast(d.message, 4000);
+                                logEvent(d.message);
+                                setTimeout(() => location.reload(), 2000);
+                            })
+                            .catch(err => {
+                                console.error("ОШИБКА ЗАПРОСА:", err);
+                                toast("Ошибка: " + err.message, 4000);
+                            });
+                    }, 600);
+                    return;
+                }
+
+                if (tick % 2 === 0) {
+                    pAv.classList.add('attack-player');
+                    setTimeout(() => pAv.classList.remove('attack-player'), 200);
+                    dealDmg('enemy', data.playerDmg);
+                } else {
+                    eAv.classList.add('attack-enemy');
+                    setTimeout(() => eAv.classList.remove('attack-enemy'), 200);
+                    dealDmg('player', data.enemyDmg);
+                }
+                tick++;
+            }, 600);
+        });
+    }
+
+    /* ---------- Журнал, Дуэли, Скиллы ---------- */
+    function logEvent(text) { const log = JSON.parse(localStorage.getItem('eventLog') || '[]'); log.unshift({ t: Date.now(), text }); localStorage.setItem('eventLog', JSON.stringify(log.slice(0, 20))); renderLog(); }
+    function renderLog() { const el = document.getElementById('logList'); if (!el) return; const log = JSON.parse(localStorage.getItem('eventLog') || '[]'); el.innerHTML = log.map(e => { const d = new Date(e.t); return `<li><b>${d.toLocaleTimeString('ru-RU', {hour:'2-digit',minute:'2-digit'})}</b> ${e.text}</li>`; }).join(''); }
+    renderLog();
+
+    function claimDaily() { fetch('/api/daily-reward', { method: 'POST' }).then(r => r.json()).then(d => { toast(d.message, 3500); logEvent(d.message); document.getElementById('dailyPanel')?.remove(); setTimeout(() => location.reload(), 2000); }); }
+
+    function loadDuels() {
+        const el = document.getElementById('duelList'); if (!el) return;
+        fetch('/api/duel/list').then(r => r.json()).then(list => {
+            if (!list.length) { el.innerHTML = '<p style="color:var(--text-dim)">Пока нет достойных соперников.</p>'; return; }
+            el.innerHTML = list.map(u => `<div class="panel" style="padding:12px; display:flex; justify-content:space-between; align-items:center;"><div><div style="font-weight:700;">${u.name}</div><div style="font-size:.8rem; color:var(--text-dim);">${u.class} · сила ${u.power} · 💰 ${u.gold}</div></div><button class="btn-small" onclick="fight(${u.id})">⚔ Вызвать</button></div>`).join('');
+        });
+    }
+    loadDuels();
+
+    function fight(id) { fetch('/api/duel/' + id, { method: 'POST' }).then(r => r.json()).then(d => { toast(d.message, 3500); logEvent(d.message); setTimeout(() => location.reload(), 2000); }); }
+
+    function upStat(stat) {
+        fetch('/api/skill/up?stat=' + stat, { method: 'POST' })
+            .then(r => r.json())
+            .then(d => {
+                toast(d.message, 2200);
+                logEvent(d.message);
+                setTimeout(() => location.reload(), 1200);
+            });
+    }
+</script>
+</body>
+</html>
